@@ -103,6 +103,7 @@ require (
 )
 
 require (
+	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.0.4 // indirect
 	github.com/go-openapi/swag/cmdutils v0.25.4 // indirect
 	github.com/go-openapi/swag/conv v0.25.4 // indirect
