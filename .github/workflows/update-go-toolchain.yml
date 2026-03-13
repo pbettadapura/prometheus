@@ -88,7 +88,7 @@ jobs:
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          base: custom-master
+          base: custom-main
           branch: auto/update-go-toolchain
           delete-branch: true
           commit-message: "build: bump Go toolchain to go${{ steps.latest.outputs.version }}"
