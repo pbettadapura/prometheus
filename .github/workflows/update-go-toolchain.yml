@@ -85,16 +85,16 @@ jobs:
 
           # Update go directive in root go.mod if it matches the old toolchain version
           CURRENT="${{ steps.current.outputs.version }}"
-          if grep -qP "^go ${CURRENT}$" go.mod; then
+          if grep -qxF "go ${CURRENT}" go.mod; then
             echo "  Updating go directive in go.mod"
-            sed -i "s/^go ${CURRENT}$/go ${LATEST}/" go.mod
+            sed -i "s/^go ${CURRENT//./\\.}$/go ${LATEST}/" go.mod
           fi
 
           # Update go directive in go.work if present
           if [ -f go.work ]; then
-            if grep -qP '^go \d+\.\d+' go.work; then
+            if grep -qxF "go ${CURRENT}" go.work; then
               echo "  Updating go directive in go.work"
-              sed -i "s/^go .*/go ${LATEST}/" go.work
+              sed -i "s/^go ${CURRENT//./\\.}$/go ${LATEST}/" go.work
             fi
           fi
 
