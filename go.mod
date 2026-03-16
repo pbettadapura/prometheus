@@ -1,6 +1,6 @@
 module github.com/prometheus/prometheus
 
-go 1.25.3
+go 1.25.7
 
 toolchain go1.25.7
 
