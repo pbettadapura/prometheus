@@ -1,4 +1,4 @@
-// Copyright 2021 The Prometheus Authors
+// Copyright The Prometheus Authors
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -349,11 +349,11 @@ func allEmptySpans(s []Span) bool {
 // Compact works like FloatHistogram.Compact. See there for detailed
 // explanations.
 func (h *Histogram) Compact(maxEmptyBuckets int) *Histogram {
-	h.PositiveBuckets, h.PositiveSpans = compactBuckets(
-		h.PositiveBuckets, h.PositiveSpans, maxEmptyBuckets, true,
+	h.PositiveBuckets, _, h.PositiveSpans = compactBuckets(
+		h.PositiveBuckets, nil, h.PositiveSpans, maxEmptyBuckets, true,
 	)
-	h.NegativeBuckets, h.NegativeSpans = compactBuckets(
-		h.NegativeBuckets, h.NegativeSpans, maxEmptyBuckets, true,
+	h.NegativeBuckets, _, h.NegativeSpans = compactBuckets(
+		h.NegativeBuckets, nil, h.NegativeSpans, maxEmptyBuckets, true,
 	)
 	return h
 }

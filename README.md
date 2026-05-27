@@ -113,16 +113,31 @@ The Makefile provides several targets:
 
 ### Service discovery plugins
 
-Prometheus is bundled with many service discovery plugins.
-When building Prometheus from source, you can edit the [plugins.yml](./plugins.yml)
-file to disable some service discoveries. The file is a yaml-formatted list of go
-import path that will be built into the Prometheus binary.
+Prometheus is bundled with many service discovery plugins. You can customize
+which service discoveries are included in your build using Go build tags.
 
-After you have changed the file, you
-need to run `make build` again.
+To exclude service discoveries when building with `make build`, add the desired
+tags to the `.promu.yml` file under `build.tags.all`:
 
-If you are using another method to compile Prometheus, `make plugins` will
-generate the plugins file accordingly.
+```yaml
+build:
+    tags:
+        all:
+            - netgo
+            - builtinassets
+            - remove_all_sd           # Exclude all optional SDs
+            - enable_kubernetes_sd    # Re-enable only kubernetes
+```
+
+Then run `make build` as usual. Alternatively, when using `go build` directly:
+
+```bash
+go build -tags "remove_all_sd,enable_kubernetes_sd" ./cmd/prometheus
+```
+
+Available build tags:
+* `remove_all_sd` - Exclude all optional service discoveries (keeps file_sd, static_sd, and http_sd)
+* `enable_<name>_sd` - Re-enable a specific SD when using `remove_all_sd`
 
 If you add out-of-tree plugins, which we do not endorse at the moment,
 additional steps might be needed to adjust the `go.mod` and `go.sum` files. As
@@ -143,6 +158,15 @@ The `make docker` target is intended only for use in our CI system and will not
 produce a fully working image when run locally.
 
 ## Using Prometheus as a Go Library
+
+Within the Prometheus project, repositories such as [prometheus/common](https://github.com/prometheus/common) and
+[prometheus/client-golang](https://github.com/prometheus/client-golang) are designed as re-usable libraries.
+
+The [prometheus/prometheus](https://github.com/prometheus/prometheus) repository builds a stand-alone program and is not
+designed for use as a library. We are aware that people do use parts as such,
+and we do not put any deliberate inconvenience in the way, but we want you to be
+aware that no care has been taken to make it work well as a library. For instance,
+you may encounter errors that only surface when used as a library.
 
 ### Remote Write
 

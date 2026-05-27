@@ -53,6 +53,7 @@ import (
 	"github.com/prometheus/prometheus/util/runutil"
 	"github.com/prometheus/prometheus/util/teststorage"
 	"github.com/prometheus/prometheus/util/testutil"
+	"github.com/prometheus/prometheus/util/testutil/synctest"
 )
 
 func TestPopulateLabels(t *testing.T) {
@@ -522,13 +523,13 @@ scrape_configs:
 	)
 
 	opts := Options{}
-	scrapeManager, err := NewManager(&opts, nil, nil, nil, testRegistry)
+	scrapeManager, err := NewManager(&opts, nil, nil, nil, teststorage.NewAppendable(), testRegistry)
 	require.NoError(t, err)
 	newLoop := func(scrapeLoopOptions) loop {
 		ch <- struct{}{}
 		return noopLoop()
 	}
-	sp := newTestScrapePool(t, newLoop)
+	sp := newTestScrapePool(t, nil, false, newLoop)
 	sp.activeTargets[1] = &Target{}
 	sp.loops[1] = noopLoop()
 	sp.config = cfg1.ScrapeConfigs[0]
@@ -578,11 +579,11 @@ scrape_configs:
 func TestManagerTargetsUpdates(t *testing.T) {
 	opts := Options{}
 	testRegistry := prometheus.NewRegistry()
-	m, err := NewManager(&opts, nil, nil, nil, testRegistry)
+	m, err := NewManager(&opts, nil, nil, nil, teststorage.NewAppendable(), testRegistry)
 	require.NoError(t, err)
 
-	ts := make(chan map[string][]*targetgroup.Group)
-	go m.Run(ts)
+	targetSetsCh := make(chan map[string][]*targetgroup.Group)
+	go m.Run(targetSetsCh)
 	defer m.Stop()
 
 	tgSent := make(map[string][]*targetgroup.Group)
@@ -594,7 +595,7 @@ func TestManagerTargetsUpdates(t *testing.T) {
 		}
 
 		select {
-		case ts <- tgSent:
+		case targetSetsCh <- tgSent:
 		case <-time.After(10 * time.Millisecond):
 			require.Fail(t, "Scrape manager's channel remained blocked after the set threshold.")
 		}
@@ -631,7 +632,7 @@ global:
 
 	opts := Options{}
 	testRegistry := prometheus.NewRegistry()
-	scrapeManager, err := NewManager(&opts, nil, nil, nil, testRegistry)
+	scrapeManager, err := NewManager(&opts, nil, nil, nil, teststorage.NewAppendable(), testRegistry)
 	require.NoError(t, err)
 
 	// Load the first config.
@@ -684,7 +685,7 @@ scrape_configs:
 			_, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			sp := newTestScrapePool(t, newLoop)
+			sp := newTestScrapePool(t, nil, false, newLoop)
 			sp.loops[1] = noopLoop()
 			sp.config = cfg1.ScrapeConfigs[0]
 			sp.metrics = scrapeManager.metrics
@@ -701,7 +702,7 @@ scrape_configs:
 	}
 
 	opts := Options{}
-	scrapeManager, err := NewManager(&opts, nil, nil, nil, testRegistry)
+	scrapeManager, err := NewManager(&opts, nil, nil, nil, teststorage.NewAppendable(), testRegistry)
 	require.NoError(t, err)
 
 	reload(scrapeManager, cfg1)
@@ -735,6 +736,8 @@ func setupTestServer(t *testing.T, typ string, toWrite []byte) *httptest.Server 
 }
 
 // TestManagerSTZeroIngestion tests scrape manager for various ST cases.
+// NOTE(bwplotka): There is no AppenderV2 test for this STZeroIngestion feature as in V2 flow it's
+// moved to AppenderV2 implementation (e.g. storage) and it's tested there, e.g. tsdb.TestHeadAppenderV2_Append_EnableSTAsZeroSample.
 func TestManagerSTZeroIngestion(t *testing.T) {
 	t.Parallel()
 	const (
@@ -765,8 +768,9 @@ func TestManagerSTZeroIngestion(t *testing.T) {
 							app := teststorage.NewAppendable()
 							discoveryManager, scrapeManager := runManagers(t, ctx, &Options{
 								EnableStartTimestampZeroIngestion: testSTZeroIngest,
-								skipOffsetting:                    true,
-							}, app)
+								ParseST:                           testSTZeroIngest,
+								skipJitterOffsetting:              true,
+							}, app, nil)
 							defer scrapeManager.Stop()
 
 							server := setupTestServer(t, config.ScrapeProtocolsHeaders[testFormat], encoded)
@@ -905,6 +909,8 @@ func generateTestHistogram(i int) *dto.Histogram {
 	return h
 }
 
+// NOTE(bwplotka): There is no AppenderV2 test for this STZeroIngestion feature as in V2 flow it's
+// moved to AppenderV2 implementation (e.g. storage) and it's tested there, e.g. tsdb.TestHeadAppenderV2_Append_EnableSTAsZeroSample.
 func TestManagerSTZeroIngestionHistogram(t *testing.T) {
 	t.Parallel()
 	const mName = "expected_histogram"
@@ -949,8 +955,9 @@ func TestManagerSTZeroIngestionHistogram(t *testing.T) {
 			app := teststorage.NewAppendable()
 			discoveryManager, scrapeManager := runManagers(t, ctx, &Options{
 				EnableStartTimestampZeroIngestion: tc.enableSTZeroIngestion,
-				skipOffsetting:                    true,
-			}, app)
+				ParseST:                           tc.enableSTZeroIngestion,
+				skipJitterOffsetting:              true,
+			}, app, nil)
 			defer scrapeManager.Stop()
 
 			once := sync.Once{}
@@ -1030,7 +1037,7 @@ func TestUnregisterMetrics(t *testing.T) {
 	// Check that all metrics can be unregistered, allowing a second manager to be created.
 	for range 2 {
 		opts := Options{}
-		manager, err := NewManager(&opts, nil, nil, nil, reg)
+		manager, err := NewManager(&opts, nil, nil, nil, teststorage.NewAppendable(), reg)
 		require.NotNil(t, manager)
 		require.NoError(t, err)
 		// Unregister all metrics.
@@ -1043,6 +1050,9 @@ func TestUnregisterMetrics(t *testing.T) {
 // This test addresses issue #17216 by ensuring the previously blocking check has been removed.
 // The test verifies that the presence of exemplars in the input does not cause errors,
 // although exemplars are not preserved during NHCB conversion (as documented below).
+//
+// NOTE(bwplotka): There is no AppenderV2 test for this STZeroIngestion feature as in V2 flow it's
+// moved to AppenderV2 implementation (e.g. storage) and it's tested there, e.g. tsdb.TestHeadAppenderV2_Append_EnableSTAsZeroSample.
 func TestNHCBAndSTZeroIngestion(t *testing.T) {
 	t.Parallel()
 
@@ -1058,8 +1068,9 @@ func TestNHCBAndSTZeroIngestion(t *testing.T) {
 	app := teststorage.NewAppendable()
 	discoveryManager, scrapeManager := runManagers(t, ctx, &Options{
 		EnableStartTimestampZeroIngestion: true,
-		skipOffsetting:                    true,
-	}, app)
+		ParseST:                           true,
+		skipJitterOffsetting:              true,
+	}, app, nil)
 	defer scrapeManager.Stop()
 
 	once := sync.Once{}
@@ -1153,16 +1164,13 @@ func applyConfig(
 	require.NoError(t, discoveryManager.ApplyConfig(c))
 }
 
-func runManagers(t *testing.T, ctx context.Context, opts *Options, app storage.Appendable) (*discovery.Manager, *Manager) {
+func runManagers(t *testing.T, ctx context.Context, opts *Options, app storage.Appendable, appV2 storage.AppendableV2) (*discovery.Manager, *Manager) {
 	t.Helper()
 
 	if opts == nil {
 		opts = &Options{}
 	}
 	opts.DiscoveryReloadInterval = model.Duration(100 * time.Millisecond)
-	if app == nil {
-		app = teststorage.NewAppendable()
-	}
 
 	reg := prometheus.NewRegistry()
 	sdMetrics, err := discovery.RegisterSDMetrics(reg, discovery.NewRefreshMetrics(reg))
@@ -1178,7 +1186,7 @@ func runManagers(t *testing.T, ctx context.Context, opts *Options, app storage.A
 		opts,
 		nil,
 		nil,
-		app,
+		app, appV2,
 		prometheus.NewRegistry(),
 	)
 	require.NoError(t, err)
@@ -1251,7 +1259,7 @@ scrape_configs:
   - files: ['%s']
 `
 
-	discoveryManager, scrapeManager := runManagers(t, ctx, nil, nil)
+	discoveryManager, scrapeManager := runManagers(t, ctx, nil, nil, teststorage.NewAppendable())
 	defer scrapeManager.Stop()
 
 	applyConfig(
@@ -1350,7 +1358,7 @@ scrape_configs:
   file_sd_configs:
   - files: ['%s', '%s']
 `
-	discoveryManager, scrapeManager := runManagers(t, ctx, nil, nil)
+	discoveryManager, scrapeManager := runManagers(t, ctx, nil, nil, teststorage.NewAppendable())
 	defer scrapeManager.Stop()
 
 	applyConfig(
@@ -1409,7 +1417,7 @@ scrape_configs:
   file_sd_configs:
   - files: ['%s']
 `
-	discoveryManager, scrapeManager := runManagers(t, ctx, nil, nil)
+	discoveryManager, scrapeManager := runManagers(t, ctx, nil, nil, teststorage.NewAppendable())
 	defer scrapeManager.Stop()
 
 	applyConfig(
@@ -1475,7 +1483,7 @@ scrape_configs:
   - targets: ['%s']
 `
 
-	discoveryManager, scrapeManager := runManagers(t, ctx, nil, nil)
+	discoveryManager, scrapeManager := runManagers(t, ctx, nil, nil, teststorage.NewAppendable())
 	defer scrapeManager.Stop()
 
 	// Apply the initial config with an existing file
@@ -1559,7 +1567,7 @@ scrape_configs:
 
 	cfg := loadConfiguration(t, cfgText)
 
-	m, err := NewManager(&Options{}, nil, nil, teststorage.NewAppendable(), prometheus.NewRegistry())
+	m, err := NewManager(&Options{}, nil, nil, nil, teststorage.NewAppendable(), prometheus.NewRegistry())
 	require.NoError(t, err)
 	defer m.Stop()
 	require.NoError(t, m.ApplyConfig(cfg))
@@ -1580,7 +1588,7 @@ scrape_configs:
 
 	// Disable end of run staleness markers for some targets.
 	m.DisableEndOfRunStalenessMarkers("one", targetsToDisable)
-	// This should be a no-op
+	// This should be a no-op.
 	m.DisableEndOfRunStalenessMarkers("non-existent-job", targetsToDisable)
 
 	// Check that the end of run staleness markers are disabled for the correct targets.
@@ -1590,5 +1598,119 @@ scrape_configs:
 			expectedDisabled := slices.Contains(targetsToDisable, tg)
 			require.Equal(t, expectedDisabled, loop.disabledEndOfRunStalenessMarkers.Load())
 		}
+	}
+}
+
+func TestManager_InitialScrapeOffset(t *testing.T) {
+	interval := 10 * time.Second
+
+	for _, tcase := range []struct {
+		name                string
+		initialScrapeOffset time.Duration
+		runDuration         time.Duration
+		expectedSamples     int
+	}{
+		{
+			name:            "zero offset scrapes immediately",
+			expectedSamples: 1,
+		},
+		{
+			name:            "zero offset scrapes twice after one interval",
+			runDuration:     interval,
+			expectedSamples: 2,
+		},
+		{
+			name:                "large offset prevents immediate scrape",
+			initialScrapeOffset: 1 * time.Hour,
+			runDuration:         59 * time.Minute,
+		},
+	} {
+		t.Run(tcase.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				opts := &Options{InitialScrapeOffset: tcase.initialScrapeOffset}
+				scrapeManager, app, cleanupConns := setupSynctestManager(t, opts, interval)
+				defer cleanupConns()
+
+				// Wait for the scrape manager to block on its timers.
+				synctest.Wait()
+
+				// Fast-forward the fake clock by the test case's run duration.
+				time.Sleep(tcase.runDuration)
+				synctest.Wait()
+
+				// Stop the manager to clean up background goroutines.
+				scrapeManager.Stop()
+
+				require.Len(t, findSamplesForMetric(app.ResultSamples(), "expected_metric"), tcase.expectedSamples)
+			})
+		})
+	}
+}
+
+func TestManager_ScrapeOnShutdown(t *testing.T) {
+	interval := 10 * time.Second
+
+	for _, tcase := range []struct {
+		name                 string
+		scrapeOnShutdown     bool
+		initialScrapeOffset  time.Duration
+		runDuration          time.Duration
+		expectedSamplesTotal int
+	}{
+		{
+			name:                 "no scrape on shutdown",
+			scrapeOnShutdown:     false,
+			expectedSamplesTotal: 1,
+		},
+		{
+			name:                 "scrape on shutdown",
+			scrapeOnShutdown:     true,
+			expectedSamplesTotal: 2,
+		},
+		{
+			name:                 "scrape on shutdown after some scrapes",
+			scrapeOnShutdown:     true,
+			runDuration:          interval,
+			expectedSamplesTotal: 3,
+		},
+		{
+			name:                 "scrape on shutdown with initial offset",
+			scrapeOnShutdown:     true,
+			initialScrapeOffset:  10 * time.Second,
+			runDuration:          5 * time.Second,
+			expectedSamplesTotal: 1,
+		},
+		{
+			name:                 "scrape on shutdown with short running instance (offset 5s)",
+			scrapeOnShutdown:     true,
+			initialScrapeOffset:  5 * time.Second,
+			runDuration:          8 * time.Second,
+			expectedSamplesTotal: 2,
+		},
+	} {
+		t.Run(tcase.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				opts := &Options{
+					ScrapeOnShutdown:    tcase.scrapeOnShutdown,
+					InitialScrapeOffset: tcase.initialScrapeOffset,
+				}
+				scrapeManager, app, cleanupConns := setupSynctestManager(t, opts, interval)
+				defer cleanupConns()
+
+				// Wait for the initial scrape to happen exactly at t=0.
+				synctest.Wait()
+
+				// Fast-forward fake time to simulate scheduled scrapes before shutdown.
+				if tcase.runDuration > 0 {
+					time.Sleep(tcase.runDuration)
+					synctest.Wait()
+				}
+
+				// Stop the manager. This triggers the ScrapeOnShutdown logic synchronously.
+				scrapeManager.Stop()
+
+				require.Len(t, findSamplesForMetric(app.ResultSamples(), "expected_metric"), tcase.expectedSamplesTotal)
+			})
+		})
 	}
 }

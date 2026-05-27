@@ -1,4 +1,4 @@
-// Copyright 2017 The Prometheus Authors
+// Copyright The Prometheus Authors
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"sync"
 	"testing"
 
@@ -729,6 +730,17 @@ func TestMergeLabels(t *testing.T) {
 	}
 }
 
+func TestDecodeReadRequestTooLarge(t *testing.T) {
+	// 5-byte snappy stream whose header claims 256 MiB decoded length,
+	// well above decodeReadLimit (32 MiB).
+	bomb := []byte{0x80, 0x80, 0x80, 0x80, 0x01}
+	req, err := http.NewRequest(http.MethodPost, "/", bytes.NewReader(bomb))
+	require.NoError(t, err)
+
+	_, err = DecodeReadRequest(req)
+	require.ErrorContains(t, err, "exceeds limit")
+}
+
 func TestDecodeWriteRequest(t *testing.T) {
 	buf, _, _, err := buildWriteRequest(nil, writeRequestFixture.Timeseries, nil, nil, nil, nil, "snappy")
 	require.NoError(t, err)
@@ -1146,7 +1158,7 @@ func buildTestChunks(t *testing.T) []prompb.Chunk {
 		minTimeMs := time
 
 		for j := range numSamplesPerTestChunk {
-			a.Append(time, float64(i+j))
+			a.Append(0, time, float64(i+j))
 			time += int64(1000)
 		}
 

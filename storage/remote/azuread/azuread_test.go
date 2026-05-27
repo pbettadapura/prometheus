@@ -1,4 +1,4 @@
-// Copyright 2023 The Prometheus Authors
+// Copyright The Prometheus Authors
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -25,6 +25,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	config_util "github.com/prometheus/common/config"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -32,11 +33,11 @@ import (
 )
 
 const (
-	dummyAudience     = "dummyAudience"
-	dummyClientID     = "00000000-0000-0000-0000-000000000000"
-	dummyClientSecret = "Cl1ent$ecret!"
-	dummyTenantID     = "00000000-a12b-3cd4-e56f-000000000000"
-	testTokenString   = "testTokenString"
+	dummyAudience                        = "dummyAudience"
+	dummyClientID                        = "00000000-0000-0000-0000-000000000000"
+	dummyClientSecret config_util.Secret = "Cl1ent$ecret!"
+	dummyTenantID                        = "00000000-a12b-3cd4-e56f-000000000000"
+	testTokenString                      = "testTokenString"
 )
 
 func testTokenExpiry() time.Time { return time.Now().Add(5 * time.Second) }

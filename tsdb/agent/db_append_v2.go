@@ -72,7 +72,6 @@ func (a *appenderV2) Append(ref storage.SeriesRef, ls labels.Labels, st, t int64
 	lastTS := s.lastTs
 	s.Unlock()
 
-	// TODO(bwplotka): Handle ST natively (as per PROM-60).
 	if a.opts.EnableSTAsZeroSample && st != 0 {
 		a.bestEffortAppendSTZeroSample(s, ls, lastTS, st, t, h, fh)
 	}
@@ -86,6 +85,7 @@ func (a *appenderV2) Append(ref storage.SeriesRef, ls labels.Labels, st, t int64
 	case fh != nil:
 		isStale = value.IsStaleNaN(fh.Sum)
 		// NOTE: always modify pendingFloatHistograms and floatHistogramSeries together
+		// TODO(krajorama,ywwg,bwplotka): Pass ST when available in WAL.
 		a.pendingFloatHistograms = append(a.pendingFloatHistograms, record.RefFloatHistogramSample{
 			Ref: s.ref,
 			T:   t,
@@ -95,6 +95,7 @@ func (a *appenderV2) Append(ref storage.SeriesRef, ls labels.Labels, st, t int64
 	case h != nil:
 		isStale = value.IsStaleNaN(h.Sum)
 		// NOTE: always modify pendingHistograms and histogramSeries together
+		// TODO(krajorama,ywwg,bwplotka): Pass ST when available in WAL.
 		a.pendingHistograms = append(a.pendingHistograms, record.RefHistogramSample{
 			Ref: s.ref,
 			T:   t,
@@ -107,6 +108,7 @@ func (a *appenderV2) Append(ref storage.SeriesRef, ls labels.Labels, st, t int64
 		// NOTE: always modify pendingSamples and sampleSeries together.
 		a.pendingSamples = append(a.pendingSamples, record.RefSample{
 			Ref: s.ref,
+			ST:  st,
 			T:   t,
 			V:   v,
 		})
@@ -125,6 +127,16 @@ func (a *appenderV2) Append(ref storage.SeriesRef, ls labels.Labels, st, t int64
 		partialErr = a.appendExemplars(s, opts.Exemplars)
 	}
 	return storage.SeriesRef(s.ref), partialErr
+}
+
+func (a *appenderV2) Commit() error {
+	defer a.appenderV2Pool.Put(a)
+	return a.commit()
+}
+
+func (a *appenderV2) Rollback() error {
+	defer a.appenderV2Pool.Put(a)
+	return a.rollback()
 }
 
 func (a *appenderV2) appendExemplars(s *memSeries, exemplar []exemplar.Exemplar) error {
