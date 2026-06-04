@@ -2,6 +2,8 @@ module github.com/prometheus/prometheus
 
 go 1.25.0
 
+toolchain go1.25.11
+
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.21.1
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.1
