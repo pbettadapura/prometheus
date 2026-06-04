@@ -103,7 +103,7 @@ require (
 	github.com/puzpuzpuz/xsync/v4 v4.4.0 // indirect
 	github.com/scaleway/scaleway-sdk-go v1.0.0-beta.36 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
-	github.com/stackitcloud/stackit-sdk-go/core v0.23.0 // indirect
+	github.com/stackitcloud/stackit-sdk-go/core v0.26.0 // indirect
 	github.com/xhit/go-str2duration/v2 v2.1.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/collector/component v1.54.0 // indirect

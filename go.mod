@@ -72,7 +72,7 @@ require (
 	github.com/prometheus/sigv4 v0.4.1
 	github.com/scaleway/scaleway-sdk-go v1.0.0-beta.36
 	github.com/shurcooL/httpfs v0.0.0-20230704072500-f1e31cf0ba5c
-	github.com/stackitcloud/stackit-sdk-go/core v0.23.0
+	github.com/stackitcloud/stackit-sdk-go/core v0.26.0
 	github.com/stretchr/testify v1.11.1
 	github.com/vultr/govultr/v3 v3.28.1
 	go.opentelemetry.io/collector/component v1.54.0
